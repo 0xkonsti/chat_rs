@@ -1,0 +1,17 @@
+[package]
+name = "chat_core"
+version = "0.1.0-dev"
+edition = "2021"
+description = "The client for the chat application"
+authors = ["Konstantin Opora <konstantinopora@gmail.com>"]
+rust-version = "1.81.0"
+license = "MIT OR Apache-2.0"
+
+[lib]
+name = "chat_core"
+path = "src/lib.rs"
+
+[dependencies]
+tokio = { workspace = true }
+crc32fast = "1.4.*"
+chrono = { workspace = true }

@@ -1,0 +1,18 @@
+[package]
+name = "chat_client"
+version = "0.1.0-dev"
+edition = "2021"
+description = "The client for the chat application"
+authors = ["Konstantin Opora <konstantinopora@gmail.com>"]
+rust-version = "1.81.0"
+license = "MIT OR Apache-2.0"
+
+[[bin]]
+name = "client"
+path = "src/main.rs"
+
+[dependencies]
+chat_core = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }

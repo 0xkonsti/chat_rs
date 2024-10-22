@@ -1,0 +1,13 @@
+[workspace]
+resolver = "2"
+members = ["crates/chat_server", "crates/chat_core", "crates/chat_client"]
+
+[workspace.dependencies]
+chat_core = { path = "crates/chat_core" }
+tracing = "0.1.*"
+tracing-subscriber = "0.3.*"
+chrono = "0.4.*"
+
+[workspace.dependencies.tokio]
+version = "1.0.0"
+features = ["full", "tracing"]
