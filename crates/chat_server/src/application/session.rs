@@ -1,7 +1,6 @@
-use std::sync::Arc;
-
 use chat_core::protocol::Message;
-use tokio::{net::TcpStream, sync::mpsc};
+use chrono::{DateTime, Utc};
+use tokio::sync::mpsc;
 use uuid::Uuid;
 
 use super::user::User;
@@ -9,9 +8,9 @@ use super::user::User;
 #[derive(Debug)]
 pub struct Session {
     id: Uuid,
-    //socket: Arc<TcpStream>,
     user: Option<User>,
     tx: Option<mpsc::UnboundedSender<Message>>,
+    last_heartbeat: Option<DateTime<Utc>>,
 
     closed: bool,
 }
@@ -22,10 +21,10 @@ impl Session {
 
         Self {
             id,
-            //socket,
             user: None,
             tx: None,
             closed: false,
+            last_heartbeat: None,
         }
     }
 
@@ -51,5 +50,17 @@ impl Session {
 
     pub fn is_closed(&self) -> bool {
         self.closed
+    }
+
+    pub fn last_heartbeat(&self) -> Option<DateTime<Utc>> {
+        self.last_heartbeat
+    }
+
+    pub fn update_heartbeat(&mut self, heartbeat: Option<DateTime<Utc>>) {
+        if let Some(heartbeat) = heartbeat {
+            self.last_heartbeat = Some(heartbeat);
+        } else {
+            self.last_heartbeat = Some(Utc::now());
+        }
     }
 }

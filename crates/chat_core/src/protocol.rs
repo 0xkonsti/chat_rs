@@ -1,10 +1,18 @@
-use std::error::Error;
+// use std::error::Error;
 
 use chrono::prelude::*;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::tcp::{OwnedReadHalf, OwnedWriteHalf},
 };
+
+macro_rules! error_string {
+    ($e:expr) => {
+        if let Err(e) = $e {
+            return Err(e.to_string());
+        }
+    };
+}
 
 const HEADER_START: u16 = 0x5918;
 const VERSION: u8 = 0x01;
@@ -39,7 +47,7 @@ struct PayloadField {
 }
 
 #[derive(Debug, Clone)]
-struct Payload {
+pub struct Payload {
     count: u32,
     fields: Vec<PayloadField>,
 }
@@ -125,6 +133,10 @@ impl Payload {
         }
         hasher.finalize()
     }
+
+    pub fn get_data(&self) -> Vec<Vec<u8>> {
+        self.fields.iter().map(|field| field.field_data.clone()).collect()
+    }
 }
 
 impl Default for Payload {
@@ -188,7 +200,11 @@ impl Message {
         self.header.message_type
     }
 
-    pub async fn send(&self, stream: &mut OwnedWriteHalf) -> Result<(), Box<dyn Error>> {
+    pub fn payload(&self) -> &Payload {
+        &self.payload
+    }
+
+    pub async fn send(&self, stream: &mut OwnedWriteHalf) -> Result<(), String> {
         let mut buf: Vec<u8> = Vec::new();
         buf.extend_from_slice(&HEADER_START.to_be_bytes());
         buf.push(self.header.version);
@@ -202,42 +218,46 @@ impl Message {
 
         buf.extend_from_slice(&self.checksum.to_be_bytes());
 
-        stream.write_all(&buf).await?;
+        // if let Err(e) = stream.write_all(&buf).await {
+        //     return Err(e.to_string());
+        // }
+
+        error_string!(stream.write_all(&buf).await);
 
         Ok(())
     }
 
-    pub async fn receive(stream: &mut OwnedReadHalf) -> Result<Self, Box<dyn Error>> {
+    pub async fn receive(stream: &mut OwnedReadHalf) -> Result<Self, String> {
         let mut buf = [0u8; 1];
-        stream.read_exact(&mut buf).await?;
+        error_string!(stream.read_exact(&mut buf).await);
         let version = buf[0];
         if version != VERSION {
             return Err("Invalid version".into());
         }
 
         let mut buf = [0u8; 1];
-        stream.read_exact(&mut buf).await?;
+        error_string!(stream.read_exact(&mut buf).await);
         let message_type = MessageType::from(buf[0]);
 
         let mut builder = MessageBuilder::new(message_type);
 
         let mut buf = [0u8; 4];
-        stream.read_exact(&mut buf).await?;
+        error_string!(stream.read_exact(&mut buf).await);
         let payload_count = u32::from_be_bytes(buf);
 
         for _ in 0..payload_count {
             let mut buf = [0u8; 4];
-            stream.read_exact(&mut buf).await?;
+            error_string!(stream.read_exact(&mut buf).await);
             let field_length = u32::from_be_bytes(buf);
 
             let mut field_data = vec![0u8; field_length as usize];
-            stream.read_exact(&mut field_data).await?;
+            error_string!(stream.read_exact(&mut field_data).await);
 
             builder = builder.with_field(field_data);
         }
 
         let mut buf = [0u8; 4];
-        stream.read_exact(&mut buf).await?;
+        error_string!(stream.read_exact(&mut buf).await);
         let checksum = u32::from_be_bytes(buf);
 
         if checksum != builder.payload.checksum() {

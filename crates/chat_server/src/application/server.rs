@@ -4,6 +4,7 @@ use chat_core::{
     constants::{HOST, PORT},
     protocol::{Message, MessageType},
 };
+use chrono::{DateTime, Utc};
 use tokio::{
     net::{
         tcp::{OwnedReadHalf, OwnedWriteHalf},
@@ -49,6 +50,7 @@ impl Server {
         let mut session = Session::new();
         let session_id = session.id();
         session.set_channel(tx.clone());
+        session.update_heartbeat(None);
 
         shared_state
             .write()
@@ -69,9 +71,9 @@ impl Server {
             session_id,
         ));
 
-        tx.send(Message::PING).unwrap();
-        tx.send(Message::PONG).unwrap();
-        tx.send(Message::ACK).unwrap();
+        // tx.send(Message::PING).unwrap();
+        // tx.send(Message::PONG).unwrap();
+        // tx.send(Message::ACK).unwrap();
 
         send_h.await.unwrap();
         recv_h.await.unwrap();
@@ -93,8 +95,8 @@ impl Server {
 
             if let Some(message) = rx.recv().await {
                 tracing::info!("Sending message: {:?}", message.message_type());
-                if !message.send(&mut writer).await.is_ok() {
-                    tracing::error!("Error sending message");
+                if let Err(e) = message.send(&mut writer).await {
+                    tracing::error!("Error sending message: {}", e);
                     Self::handle_disconnect(shared_state.clone(), session_id).await;
                 }
                 if message.is(MessageType::Disconnect) {
@@ -128,6 +130,22 @@ impl Server {
                             tx.send(Message::DISCONNECT).unwrap();
                             break;
                         }
+                        MessageType::Heartbeat => {
+                            shared_state
+                                .read()
+                                .await
+                                .update_heartbeat(
+                                    session_id,
+                                    Some(
+                                        DateTime::parse_from_rfc3339(
+                                            std::str::from_utf8(&message.payload().get_data()[0]).unwrap(),
+                                        )
+                                        .unwrap()
+                                        .with_timezone(&Utc),
+                                    ),
+                                )
+                                .await;
+                        }
                         _ => {}
                     }
                 }
@@ -153,11 +171,10 @@ impl Server {
                 break;
             }
 
-            tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
-
             if let Err(e) = tx.send(Message::heartbeat()) {
                 tracing::warn!("Error sending heartbeat: {}", e);
             }
+            tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
         }
     }
 }

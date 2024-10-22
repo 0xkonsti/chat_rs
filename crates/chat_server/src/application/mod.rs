@@ -76,6 +76,12 @@ impl SharedState {
 
         tracing::debug!("Closed session {}", id);
     }
+
+    pub async fn update_heartbeat(&self, id: Uuid, heartbeat: Option<chrono::DateTime<chrono::Utc>>) {
+        if let Some(session) = self.sessions.get(&id) {
+            session.write().await.update_heartbeat(heartbeat);
+        }
+    }
 }
 
 impl Application {

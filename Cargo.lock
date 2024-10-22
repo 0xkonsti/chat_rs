@@ -110,6 +110,7 @@ name = "chat_server"
 version = "0.1.0-dev"
 dependencies = [
  "chat_core",
+ "chrono",
  "tokio",
  "tracing",
  "tracing-subscriber",
