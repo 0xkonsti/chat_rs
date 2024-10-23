@@ -24,6 +24,9 @@ pub struct Session {
 impl AccessLevel {
     const ADMIN_ACCESS_GROUP: &[MessageType] = &[MessageType::ServerDebugLog];
     const GUEST_ACCESS_GROUP: &[MessageType] = &[
+        MessageType::Empty,
+        MessageType::Ack,
+        MessageType::Nack,
         MessageType::AuthCreate,
         MessageType::Auth,
         MessageType::Heartbeat,
@@ -88,10 +91,6 @@ impl Session {
 
     pub fn is_closed(&self) -> bool {
         self.closed
-    }
-
-    pub fn last_heartbeat(&self) -> Option<DateTime<Utc>> {
-        self.last_heartbeat
     }
 
     pub fn update_heartbeat(&mut self, heartbeat: Option<DateTime<Utc>>) {

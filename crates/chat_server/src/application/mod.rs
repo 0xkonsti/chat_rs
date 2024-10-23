@@ -59,10 +59,6 @@ impl SharedState {
         self.users.get(name)
     }
 
-    pub fn get_session(&self, id: Uuid) -> Option<ArcRwLock<Session>> {
-        self.sessions.get(&id).cloned()
-    }
-
     pub async fn remove_session(&mut self, id: Uuid) {
         if !self.sessions.contains_key(&id) {
             return;
@@ -83,11 +79,9 @@ impl SharedState {
     pub async fn close_session(&mut self, id: Uuid) {
         if let Some(session) = self.sessions.get(&id) {
             session.write().await.close();
+            self.remove_session(id).await;
+            tracing::debug!("Closed session {}", id);
         }
-
-        self.remove_session(id).await;
-
-        tracing::debug!("Closed session {}", id);
     }
 
     pub async fn update_heartbeat(&self, id: Uuid, heartbeat: Option<chrono::DateTime<chrono::Utc>>) {

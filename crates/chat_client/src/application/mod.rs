@@ -102,6 +102,10 @@ impl Application {
             }
 
             if let Some(message) = rx.recv().await {
+                if message.is(MessageType::Break) {
+                    // dc_tx.try_send(true).unwrap();
+                    break;
+                }
                 tracing::debug!("Sending message: {:?}", message.message_type());
                 message.send(&mut writer).await.unwrap();
                 if message.is(MessageType::Disconnect) {
@@ -136,6 +140,7 @@ impl Application {
                             if let Err(e) = dc_tx.try_send(true) {
                                 tracing::warn!("Error sending disconnect message: {}", e);
                             }
+                            tx.send(Message::BREAK).unwrap();
                             break;
                         }
                         MessageType::Heartbeat => {

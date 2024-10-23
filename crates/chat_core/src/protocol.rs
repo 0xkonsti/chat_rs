@@ -23,17 +23,18 @@ pub enum MessageType {
     Empty = 0x00,
     Ack = 0x01,
     Nack = 0x02,
-    Ping = 0x03,
-    Pong = 0x04,
-    Disconnect = 0x05,
-    Heartbeat = 0x06,
-    ServerDebugLog = 0x07,
+    Disconnect = 0x03,
+    Heartbeat = 0x04,
 
     // Authentification
     Auth = 0x10,
     AuthCreate = 0x11,
     AuthSuccess = 0x12,
     AuthFailure = 0x13,
+
+    ServerDebugLog = 0x20,
+
+    Break = 0xff,
 }
 
 #[derive(Debug, Clone)]
@@ -73,16 +74,17 @@ impl MessageType {
             0x00 => MessageType::Empty,
             0x01 => MessageType::Ack,
             0x02 => MessageType::Nack,
-            0x03 => MessageType::Ping,
-            0x04 => MessageType::Pong,
-            0x05 => MessageType::Disconnect,
-            0x06 => MessageType::Heartbeat,
-            0x07 => MessageType::ServerDebugLog,
+            0x03 => MessageType::Disconnect,
+            0x04 => MessageType::Heartbeat,
 
             0x10 => MessageType::Auth,
             0x11 => MessageType::AuthCreate,
             0x12 => MessageType::AuthSuccess,
             0x13 => MessageType::AuthFailure,
+
+            0x20 => MessageType::ServerDebugLog,
+
+            0xff => MessageType::Break,
 
             _ => MessageType::Empty,
         }
@@ -158,6 +160,11 @@ impl Message {
         payload: Payload::EMPTY,
         checksum: 0,
     };
+    pub const BREAK: Message = Message {
+        header: Header::from_message_type(MessageType::Break),
+        payload: Payload::EMPTY,
+        checksum: 0,
+    };
     pub const DISCONNECT: Message = Message {
         header: Header::from_message_type(MessageType::Disconnect),
         payload: Payload::EMPTY,
@@ -170,16 +177,6 @@ impl Message {
     };
     pub const NACK: Message = Message {
         header: Header::from_message_type(MessageType::Nack),
-        payload: Payload::EMPTY,
-        checksum: 0,
-    };
-    pub const PING: Message = Message {
-        header: Header::from_message_type(MessageType::Ping),
-        payload: Payload::EMPTY,
-        checksum: 0,
-    };
-    pub const PONG: Message = Message {
-        header: Header::from_message_type(MessageType::Pong),
         payload: Payload::EMPTY,
         checksum: 0,
     };
@@ -272,10 +269,6 @@ impl Message {
         }
 
         buf.extend_from_slice(&self.checksum.to_be_bytes());
-
-        // if let Err(e) = stream.write_all(&buf).await {
-        //     return Err(e.to_string());
-        // }
 
         error_string!(stream.write_all(&buf).await);
 

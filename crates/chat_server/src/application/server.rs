@@ -4,7 +4,6 @@ use chat_core::{
     constants::{HOST, PORT},
     protocol::{Message, MessageType},
 };
-use chrono::{DateTime, Utc};
 use tokio::{
     net::{
         tcp::{OwnedReadHalf, OwnedWriteHalf},
@@ -98,6 +97,10 @@ impl Server {
             }
 
             if let Some(message) = rx.recv().await {
+                if message.is(MessageType::Break) {
+                    Self::handle_disconnect(shared_state.clone(), session_id).await;
+                    break;
+                }
                 tracing::info!("Sending message: {:?}", message.message_type());
                 if let Err(e) = message.send(&mut writer).await {
                     tracing::error!("Error sending message: {}", e);
@@ -117,53 +120,103 @@ impl Server {
         session_id: Uuid,
     ) {
         loop {
-            if !shared_state.read().await.is_active_session(session_id).await {
-                break;
-            }
+            // if !shared_state.read().await.is_active_session(session_id).await || tx.is_closed() {
+            //     break;
+            // }
 
-            if !Message::has_header_start(&mut reader).await {
-                continue;
-            }
-
-            let message = Message::receive(&mut reader).await;
-            match message {
-                Ok(message) => {
-                    tracing::info!("Received message: {:?}", message.message_type());
-                    if !shared_state
-                        .read()
-                        .await
-                        .get_access_level(session_id)
-                        .await
-                        .can_access(&message.message_type())
-                    {
-                        tx.send(Message::NACK).unwrap();
+            tokio::select! {
+                _ = tx.closed() => {
+                    break;
+                },
+                valid = Message::has_header_start(&mut reader) => {
+                    if !valid {
                         continue;
                     }
-                    match message.message_type() {
-                        MessageType::Disconnect => {
-                            tx.send(Message::DISCONNECT).unwrap();
+                    let message = Message::receive(&mut reader).await;
+                    match message {
+                        Ok(message) => {
+                            tracing::info!("Received message: {:?}", message.message_type());
+                            if !shared_state
+                                .read()
+                                .await
+                                .get_access_level(session_id)
+                                .await
+                                .can_access(&message.message_type())
+                            {
+                                tx.send(Message::NACK).unwrap();
+                                continue;
+                            }
+                            match message.message_type() {
+                                MessageType::Disconnect => {
+                                    tx.send(Message::BREAK).unwrap();
+                                    break;
+                                }
+                                MessageType::Heartbeat => {
+                                    handle_heartbeat(&message, Arc::clone(&shared_state), session_id).await;
+                                }
+                                MessageType::Auth => {
+                                    handle_auth(&message, tx.clone(), Arc::clone(&shared_state), session_id).await;
+                                }
+                                MessageType::AuthCreate => {
+                                    handle_auth_create(&message, tx.clone(), Arc::clone(&shared_state), session_id).await;
+                                }
+                                MessageType::ServerDebugLog => {
+                                    tracing::debug!("{:#?}", shared_state.read().await);
+                                }
+                                _ => {}
+                            }
+                        }
+                        Err(e) => {
+                            tracing::error!("Error receiving message: {}", e);
                             break;
                         }
-                        MessageType::Heartbeat => {
-                            handle_heartbeat(&message, Arc::clone(&shared_state), session_id).await;
-                        }
-                        MessageType::Auth => {
-                            handle_auth(&message, tx.clone(), Arc::clone(&shared_state), session_id).await;
-                        }
-                        MessageType::AuthCreate => {
-                            handle_auth_create(&message, tx.clone(), Arc::clone(&shared_state), session_id).await;
-                        }
-                        MessageType::ServerDebugLog => {
-                            tracing::debug!("{:#?}", shared_state.read().await);
-                        }
-                        _ => {}
                     }
                 }
-                Err(e) => {
-                    tracing::error!("Error receiving message: {}", e);
-                    break;
-                }
             }
+
+            // if !Message::has_header_start(&mut reader).await {
+            //     continue;
+            // }
+
+            // let message = Message::receive(&mut reader).await;
+            // match message {
+            //     Ok(message) => {
+            //         tracing::info!("Received message: {:?}", message.message_type());
+            //         if !shared_state
+            //             .read()
+            //             .await
+            //             .get_access_level(session_id)
+            //             .await
+            //             .can_access(&message.message_type())
+            //         {
+            //             tx.send(Message::NACK).unwrap();
+            //             continue;
+            //         }
+            //         match message.message_type() {
+            //             MessageType::Disconnect => {
+            //                 tx.send(Message::BREAK).unwrap();
+            //                 break;
+            //             }
+            //             MessageType::Heartbeat => {
+            //                 handle_heartbeat(&message, Arc::clone(&shared_state), session_id).await;
+            //             }
+            //             MessageType::Auth => {
+            //                 handle_auth(&message, tx.clone(), Arc::clone(&shared_state), session_id).await;
+            //             }
+            //             MessageType::AuthCreate => {
+            //                 handle_auth_create(&message, tx.clone(), Arc::clone(&shared_state), session_id).await;
+            //             }
+            //             MessageType::ServerDebugLog => {
+            //                 tracing::debug!("{:#?}", shared_state.read().await);
+            //             }
+            //             _ => {}
+            //         }
+            //     }
+            //     Err(e) => {
+            //         tracing::error!("Error receiving message: {}", e);
+            //         break;
+            //     }
+            // }
         }
     }
 
