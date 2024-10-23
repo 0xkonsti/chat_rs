@@ -55,9 +55,16 @@ impl Application {
 
     pub async fn run(&self) -> Result<(), Box<dyn Error>> {
         tracing::debug!("Starting application");
-        tracing::debug!("Connecting to server");
 
-        let stream = TcpStream::connect((HOST, PORT)).await?;
+        let mut host = HOST.to_string();
+
+        tracing::debug!("Connecting to server at {}:{}", host, PORT);
+
+        if let Ok(env_host) = std::env::var("SERVER_HOST") {
+            host = env_host;
+        }
+
+        let stream = TcpStream::connect((host, PORT)).await?;
         let stream_addr = stream.peer_addr()?;
 
         let (reader, writer) = stream.into_split();
