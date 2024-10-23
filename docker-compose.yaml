@@ -1,0 +1,7 @@
+services:
+  server:
+    container_name: rust_chat_server
+    image: luffy/rust_chat_server:0.1.0-dev
+    build: .
+    ports:
+      - "42428:42428"
