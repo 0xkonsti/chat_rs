@@ -1,4 +1,4 @@
-use std::error::Error;
+use std::{error::Error, io::Write};
 
 use chat_core::{
     constants::{HOST, PORT},
@@ -21,6 +21,21 @@ impl Application {
             .init();
 
         Ok(Application::default())
+    }
+
+    fn get_user_data() -> (String, String) {
+        let mut username = String::new();
+        let mut password = String::new();
+
+        print!("Enter username: ");
+        std::io::stdout().flush().unwrap();
+        std::io::stdin().read_line(&mut username).unwrap();
+
+        print!("Enter password: ");
+        std::io::stdout().flush().unwrap();
+        std::io::stdin().read_line(&mut password).unwrap();
+
+        (username, password)
     }
 
     pub async fn run(&self) -> Result<(), Box<dyn Error>> {
@@ -46,8 +61,14 @@ impl Application {
             std::io::stdin().read_line(&mut input).unwrap();
 
             let message = match input.trim() {
-                "new" => Message::auth_create("user", "pass"),
-                "auth" => Message::auth("user", "pass"),
+                "new" => {
+                    let (username, password) = Self::get_user_data();
+                    Message::auth_create(username.trim(), password.trim())
+                }
+                "auth" => {
+                    let (username, password) = Self::get_user_data();
+                    Message::auth(username.trim(), password.trim())
+                }
                 //"msg" => Message::message("user", "Hello, world!"),
                 "log" => Message::SERVER_DEBUG_LOG,
                 "dc" => Message::DISCONNECT,
@@ -60,10 +81,6 @@ impl Application {
                 break;
             }
         }
-
-        //std::io::stdin().read_line(&mut String::new()).unwrap();
-        //
-        //tx.send(Message::DISCONNECT).unwrap();
 
         send_h.await?;
         recv_h.await?;

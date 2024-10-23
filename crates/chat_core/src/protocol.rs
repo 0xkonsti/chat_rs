@@ -18,7 +18,7 @@ const HEADER_START: u16 = 0x5918;
 const VERSION: u8 = 0x01;
 
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MessageType {
     Empty = 0x00,
     Ack = 0x01,

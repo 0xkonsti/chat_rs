@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use argon2::Config;
 use chat_core::{
     constants::{HOST, PORT},
     protocol::{Message, MessageType},
@@ -16,7 +15,13 @@ use tokio::{
 use uuid::Uuid;
 
 use super::{ArcRwLock, SharedState};
-use crate::application::{session::Session, user::User};
+use crate::application::{
+    handles::{
+        auth::{handle_auth, handle_auth_create},
+        handle_heartbeat,
+    },
+    session::Session,
+};
 
 const HEARTBEAT_INTERVAL: u64 = 30;
 
@@ -120,81 +125,29 @@ impl Server {
             match message {
                 Ok(message) => {
                     tracing::info!("Received message: {:?}", message.message_type());
+                    if !shared_state
+                        .read()
+                        .await
+                        .get_access_level(session_id)
+                        .await
+                        .can_access(&message.message_type())
+                    {
+                        tx.send(Message::NACK).unwrap();
+                        continue;
+                    }
                     match message.message_type() {
                         MessageType::Disconnect => {
                             tx.send(Message::DISCONNECT).unwrap();
                             break;
                         }
                         MessageType::Heartbeat => {
-                            shared_state
-                                .read()
-                                .await
-                                .update_heartbeat(
-                                    session_id,
-                                    Some(
-                                        DateTime::parse_from_rfc3339(
-                                            std::str::from_utf8(&message.payload().get_data()[0]).unwrap(),
-                                        )
-                                        .unwrap()
-                                        .with_timezone(&Utc),
-                                    ),
-                                )
-                                .await;
+                            handle_heartbeat(&message, Arc::clone(&shared_state), session_id).await;
                         }
                         MessageType::Auth => {
-                            if shared_state.read().await.is_authenticated(session_id).await {
-                                tx.send(Message::NACK).unwrap();
-                                continue;
-                            }
-                            let data = message.payload().get_data();
-                            let username = std::str::from_utf8(&data[0]).unwrap();
-
-                            let user = shared_state.read().await.get_user(username).cloned();
-                            if let Some(user) = user {
-                                if user.session_id().is_some() {
-                                    tx.send(Message::auth_fail("User already logged in")).unwrap();
-                                    continue;
-                                }
-                                if argon2::verify_encoded(&user.pw_hash(), &data[1]).unwrap() {
-                                    shared_state
-                                        .write()
-                                        .await
-                                        .authenticate(session_id, user.name().to_string())
-                                        .await;
-                                    tx.send(Message::auth_success()).unwrap();
-                                    continue;
-                                }
-                            }
-                            tx.send(Message::auth_fail("Invalid username or password")).unwrap();
+                            handle_auth(&message, tx.clone(), Arc::clone(&shared_state), session_id).await;
                         }
                         MessageType::AuthCreate => {
-                            if shared_state.read().await.is_authenticated(session_id).await {
-                                tx.send(Message::NACK).unwrap();
-                                continue;
-                            }
-                            let data = message.payload().get_data();
-                            let username = std::str::from_utf8(&data[0]).unwrap();
-
-                            if shared_state.read().await.get_user(username).is_none() {
-                                let password = std::str::from_utf8(&data[1]).unwrap();
-                                let config = Config::default();
-                                // TODO: create a random salt for each user
-                                let hash = argon2::hash_encoded(password.as_bytes(), b"randomsalt", &config).unwrap();
-
-                                let username_string = username.to_string();
-                                let user = User::new(username, hash);
-
-                                shared_state.write().await.add_user(username.to_string(), user);
-                                shared_state
-                                    .write()
-                                    .await
-                                    .authenticate(session_id, username_string)
-                                    .await;
-                                tx.send(Message::auth_success()).unwrap();
-                                continue;
-                            }
-
-                            tx.send(Message::auth_fail("User already exists")).unwrap();
+                            handle_auth_create(&message, tx.clone(), Arc::clone(&shared_state), session_id).await;
                         }
                         MessageType::ServerDebugLog => {
                             tracing::debug!("{:#?}", shared_state.read().await);

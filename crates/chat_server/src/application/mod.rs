@@ -2,12 +2,13 @@ use std::{collections::HashMap, error::Error, sync::Arc};
 
 use tokio::sync::RwLock;
 
+mod handles;
 mod server;
 mod session;
 mod user;
 
 use server::Server;
-use session::Session;
+use session::{AccessLevel, Session};
 use user::User;
 use uuid::Uuid;
 
@@ -28,8 +29,20 @@ pub struct Application {
 
 impl SharedState {
     pub fn new() -> Self {
+        let mut users = HashMap::new();
+
+        let mut luffy_admin = User::new(
+            "luffy",
+            "$argon2id$v=19$m=19456,t=2,p=1$cmFuZG9tc2FsdA$jDQwPD4k6mPV4oT/0Y4M2nhVSGDxpbbJaxIbNYc84rU".to_string(),
+        );
+
+        luffy_admin.set_access_level(AccessLevel::Admin);
+
+        // add Admin user
+        users.insert("luffy".to_string(), luffy_admin);
+
         Self {
-            users: HashMap::new(),
+            users,
             sessions: HashMap::new(),
         }
     }
@@ -95,7 +108,23 @@ impl SharedState {
             if let Some(user) = self.users.get_mut(&user) {
                 user.set_session_id(id);
             }
+            self.sync_access_level(id, &user).await;
             session.write().await.set_user(user);
+        }
+    }
+
+    pub async fn get_access_level(&self, id: Uuid) -> AccessLevel {
+        if let Some(session) = self.sessions.get(&id) {
+            return session.read().await.access_level().clone();
+        }
+        AccessLevel::Guest
+    }
+
+    pub async fn sync_access_level(&self, id: Uuid, user: &str) {
+        if let Some(session) = self.sessions.get(&id) {
+            if let Some(user) = self.users.get(user) {
+                session.write().await.set_access_level(user.access_level().clone());
+            }
         }
     }
 }
