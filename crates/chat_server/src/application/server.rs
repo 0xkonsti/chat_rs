@@ -73,7 +73,11 @@ impl Server {
             session_id,
         ));
 
-        let hb_h = tokio::spawn(Self::handle_heartbeat(tx.clone()));
+        let hb_h = tokio::spawn(Self::handle_heartbeat(
+            tx.clone(),
+            Arc::clone(&shared_state),
+            session_id,
+        ));
 
         send_h.await.unwrap();
         recv_h.await.unwrap();
@@ -167,7 +171,11 @@ impl Server {
         shared_state.write().await.close_session(session_id).await;
     }
 
-    async fn handle_heartbeat(tx: mpsc::UnboundedSender<Message>) {
+    async fn handle_heartbeat(
+        tx: mpsc::UnboundedSender<Message>,
+        shared_state: ArcRwLock<SharedState>,
+        session_id: Uuid,
+    ) {
         use tokio::time::{self, Duration, Instant};
 
         let sleep = time::sleep(Duration::from_secs(HEARTBEAT_INTERVAL));
@@ -182,6 +190,7 @@ impl Server {
                     sleep.as_mut().reset(Instant::now() + Duration::from_secs(HEARTBEAT_INTERVAL));
                 },
                 _ = tx.closed() => {
+                    shared_state.write().await.close_session(session_id).await;
                     break;
                 }
             }
