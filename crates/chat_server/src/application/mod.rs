@@ -1,6 +1,6 @@
 use std::{collections::HashMap, error::Error, sync::Arc};
 
-use tokio::sync::RwLock;
+use tokio::sync::{mpsc, RwLock};
 
 mod handles;
 mod server;
@@ -19,6 +19,7 @@ type ArcRwLock<T> = Arc<RwLock<T>>;
 struct SharedState {
     users: HashMap<String, User>,
     sessions: HashMap<Uuid, ArcRwLock<Session>>,
+    shutdown_tx: Option<mpsc::Sender<bool>>,
 }
 
 #[derive(Debug)]
@@ -44,6 +45,7 @@ impl SharedState {
         Self {
             users,
             sessions: HashMap::new(),
+            shutdown_tx: None,
         }
     }
 
@@ -55,8 +57,22 @@ impl SharedState {
         self.sessions.insert(id, session);
     }
 
+    pub fn set_shutdown_tx(&mut self, tx: mpsc::Sender<bool>) {
+        self.shutdown_tx = Some(tx);
+    }
+
+    pub async fn shutdown(&self) {
+        if let Some(tx) = &self.shutdown_tx {
+            tx.send(true).await.unwrap();
+        }
+    }
+
     pub fn get_user(&self, name: &str) -> Option<&User> {
         self.users.get(name)
+    }
+
+    pub fn sessions(&self) -> &HashMap<Uuid, ArcRwLock<Session>> {
+        &self.sessions
     }
 
     pub async fn remove_session(&mut self, id: Uuid) {

@@ -32,8 +32,14 @@ pub enum MessageType {
     AuthSuccess = 0x12,
     AuthFailure = 0x13,
 
+    // Server administration
     ServerDebugLog = 0x20,
+    ServerShutdown = 0x21,
 
+    // Server Messages
+    ServerShutdownWarning = 0x30,
+
+    // Break
     Break = 0xff,
 }
 
@@ -83,6 +89,9 @@ impl MessageType {
             0x13 => MessageType::AuthFailure,
 
             0x20 => MessageType::ServerDebugLog,
+            0x21 => MessageType::ServerShutdown,
+
+            0x30 => MessageType::ServerShutdownWarning,
 
             0xff => MessageType::Break,
 
@@ -239,6 +248,30 @@ impl Message {
 
         Message {
             header: Header::from_message_type(MessageType::AuthFailure),
+            payload,
+            checksum,
+        }
+    }
+
+    pub fn server_shutdown(timeout: u64) -> Self {
+        let mut payload = Payload::default();
+        payload.add_field(timeout.to_be_bytes().to_vec());
+        let checksum = payload.checksum();
+
+        Message {
+            header: Header::from_message_type(MessageType::ServerShutdown),
+            payload,
+            checksum,
+        }
+    }
+
+    pub fn server_shutdown_warning(timeout: u64) -> Self {
+        let mut payload = Payload::default();
+        payload.add_field(timeout.to_be_bytes().to_vec());
+        let checksum = payload.checksum();
+
+        Message {
+            header: Header::from_message_type(MessageType::ServerShutdownWarning),
             payload,
             checksum,
         }

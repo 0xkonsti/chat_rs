@@ -22,7 +22,7 @@ pub struct Session {
 }
 
 impl AccessLevel {
-    const ADMIN_ACCESS_GROUP: &[MessageType] = &[MessageType::ServerDebugLog];
+    const ADMIN_ACCESS_GROUP: &[MessageType] = &[MessageType::ServerDebugLog, MessageType::ServerShutdown];
     const GUEST_ACCESS_GROUP: &[MessageType] = &[
         MessageType::Empty,
         MessageType::Ack,
@@ -98,6 +98,14 @@ impl Session {
             self.last_heartbeat = Some(heartbeat);
         } else {
             self.last_heartbeat = Some(Utc::now());
+        }
+    }
+
+    pub fn send(&self, message: Message) -> Result<(), mpsc::error::SendError<Message>> {
+        if let Some(tx) = &self.tx {
+            tx.send(message)
+        } else {
+            Err(mpsc::error::SendError(message))
         }
     }
 }

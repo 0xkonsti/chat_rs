@@ -4,6 +4,7 @@ use uuid::Uuid;
 
 use super::{ArcRwLock, SharedState};
 
+pub mod admin;
 pub mod auth;
 
 pub async fn handle_heartbeat(message: &Message, shared_state: ArcRwLock<SharedState>, session_id: Uuid) {

@@ -32,7 +32,6 @@ pub async fn handle_auth(
                 .await;
 
             tx.send(Message::auth_success()).unwrap();
-            tx.send(Message::DISCONNECT).unwrap();
             return;
         }
     }

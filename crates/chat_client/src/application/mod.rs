@@ -72,11 +72,19 @@ impl Application {
                 //"msg" => Message::message("user", "Hello, world!"),
                 "log" => Message::SERVER_DEBUG_LOG,
                 "dc" => Message::DISCONNECT,
+                "shutdown" => Message::server_shutdown(5),
                 _ => Message::heartbeat(),
             };
 
+            if tx.is_closed() {
+                break;
+            }
+
             let msg_type = message.message_type();
-            tx.send(message).unwrap();
+            if let Err(e) = tx.send(message) {
+                tracing::error!("Error sending message: {}", e);
+                break;
+            }
             if msg_type == MessageType::Disconnect {
                 break;
             }
@@ -145,6 +153,11 @@ impl Application {
                         }
                         MessageType::Heartbeat => {
                             tx.send(Message::heartbeat()).unwrap();
+                        }
+                        MessageType::ServerShutdownWarning => {
+                            let data = message.payload().get_data();
+                            let timeout = u64::from_be_bytes(data[0].clone().try_into().unwrap());
+                            tracing::warn!("Server shutting down in {} seconds", timeout);
                         }
                         _ => {}
                     }

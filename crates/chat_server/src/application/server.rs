@@ -16,6 +16,7 @@ use uuid::Uuid;
 use super::{ArcRwLock, SharedState};
 use crate::application::{
     handles::{
+        admin::handle_server_shutdown,
         auth::{handle_auth, handle_auth_create},
         handle_heartbeat,
     },
@@ -36,16 +37,25 @@ impl Server {
         let listener = TcpListener::bind((HOST, PORT)).await?;
         tracing::info!("Server started");
 
+        let (shutdown_tx, mut shutdown_rx) = mpsc::channel::<bool>(1);
+
+        shared_state.write().await.set_shutdown_tx(shutdown_tx);
+
         loop {
-            let (socket, addr) = listener.accept().await?;
-
-            tracing::info!("Accepted connection from {}", addr);
-
-            tokio::spawn(Self::handle_connection(socket, Arc::clone(&shared_state)));
+            tokio::select! {
+                _ = shutdown_rx.recv() => {
+                    break;
+                },
+                result = listener.accept() => {
+                    let (socket, addr) = result?;
+                    tracing::info!("Accepted connection from {}", addr);
+                    tokio::spawn(Self::handle_connection(socket, Arc::clone(&shared_state)));
+                }
+            }
         }
 
-        // tracing::info!("Shutting down server");
-        // Ok(())
+        tracing::info!("Shutting down server");
+        Ok(())
     }
 
     async fn handle_connection(socket: TcpStream, shared_state: ArcRwLock<SharedState>) {
@@ -162,6 +172,9 @@ impl Server {
                                 }
                                 MessageType::ServerDebugLog => {
                                     tracing::debug!("{:#?}", shared_state.read().await);
+                                }
+                                MessageType::ServerShutdown => {
+                                    handle_server_shutdown(&message, Arc::clone(&shared_state)).await;
                                 }
                                 _ => {}
                             }
