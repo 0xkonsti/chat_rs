@@ -18,6 +18,8 @@ use uuid::Uuid;
 use super::{ArcRwLock, SharedState};
 use crate::application::{session::Session, user::User};
 
+const HEARTBEAT_INTERVAL: u64 = 30;
+
 #[derive(Debug)]
 pub struct Server {}
 impl Server {
@@ -66,11 +68,7 @@ impl Server {
             session_id,
         ));
 
-        let hb_h = tokio::spawn(Self::handle_heartbeat(
-            tx.clone(),
-            Arc::clone(&shared_state),
-            session_id,
-        ));
+        let hb_h = tokio::spawn(Self::handle_heartbeat(tx.clone()));
 
         send_h.await.unwrap();
         recv_h.await.unwrap();
@@ -216,20 +214,24 @@ impl Server {
         shared_state.write().await.close_session(session_id).await;
     }
 
-    async fn handle_heartbeat(
-        tx: mpsc::UnboundedSender<Message>,
-        shared_state: ArcRwLock<SharedState>,
-        session_id: Uuid,
-    ) {
-        loop {
-            if !shared_state.read().await.is_active_session(session_id).await {
-                break;
-            }
+    async fn handle_heartbeat(tx: mpsc::UnboundedSender<Message>) {
+        use tokio::time::{self, Duration, Instant};
 
-            if let Err(e) = tx.send(Message::heartbeat()) {
-                tracing::warn!("Error sending heartbeat: {}", e);
+        let sleep = time::sleep(Duration::from_secs(HEARTBEAT_INTERVAL));
+        tokio::pin!(sleep);
+
+        loop {
+            tokio::select! {
+                () = &mut sleep => {
+                    if let Err(e) = tx.send(Message::heartbeat()) {
+                        tracing::warn!("Error sending heartbeat: {}", e);
+                    }
+                    sleep.as_mut().reset(Instant::now() + Duration::from_secs(HEARTBEAT_INTERVAL));
+                },
+                _ = tx.closed() => {
+                    break;
+                }
             }
-            tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
         }
     }
 }
