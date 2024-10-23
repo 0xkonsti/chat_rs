@@ -32,7 +32,7 @@ impl AccessLevel {
         MessageType::Heartbeat,
         MessageType::Disconnect,
     ];
-    const USER_ACCESS_GROUP: &[MessageType] = &[];
+    const USER_ACCESS_GROUP: &[MessageType] = &[MessageType::DirectMessageSend];
 
     pub fn can_access(&self, message_type: &MessageType) -> bool {
         match self {

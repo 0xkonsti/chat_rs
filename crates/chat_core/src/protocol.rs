@@ -39,6 +39,11 @@ pub enum MessageType {
     // Server Messages
     ServerShutdownWarning = 0x30,
 
+    // Messages
+    MessageError = 0x40,
+    DirectMessageSend = 0x41,
+    DirectMessageReceive = 0x42,
+
     // Break
     Break = 0xff,
 }
@@ -92,6 +97,10 @@ impl MessageType {
             0x21 => MessageType::ServerShutdown,
 
             0x30 => MessageType::ServerShutdownWarning,
+
+            0x40 => MessageType::MessageError,
+            0x41 => MessageType::DirectMessageSend,
+            0x42 => MessageType::DirectMessageReceive,
 
             0xff => MessageType::Break,
 
@@ -272,6 +281,44 @@ impl Message {
 
         Message {
             header: Header::from_message_type(MessageType::ServerShutdownWarning),
+            payload,
+            checksum,
+        }
+    }
+
+    pub fn message_error(error: &str) -> Self {
+        let mut payload = Payload::default();
+        payload.add_field(error.as_bytes().to_vec());
+        let checksum = payload.checksum();
+
+        Message {
+            header: Header::from_message_type(MessageType::MessageError),
+            payload,
+            checksum,
+        }
+    }
+
+    pub fn direct_message_send(receiver: &str, message: &str) -> Self {
+        let mut payload = Payload::default();
+        payload.add_field(receiver.as_bytes().to_vec());
+        payload.add_field(message.as_bytes().to_vec());
+        let checksum = payload.checksum();
+
+        Message {
+            header: Header::from_message_type(MessageType::DirectMessageSend),
+            payload,
+            checksum,
+        }
+    }
+
+    pub fn direct_message_receive(sender: &str, message: &str) -> Self {
+        let mut payload = Payload::default();
+        payload.add_field(sender.as_bytes().to_vec());
+        payload.add_field(message.as_bytes().to_vec());
+        let checksum = payload.checksum();
+
+        Message {
+            header: Header::from_message_type(MessageType::DirectMessageReceive),
             payload,
             checksum,
         }

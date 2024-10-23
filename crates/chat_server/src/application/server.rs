@@ -19,6 +19,7 @@ use crate::application::{
         admin::handle_server_shutdown,
         auth::{handle_auth, handle_auth_create},
         handle_heartbeat,
+        message::handle_direct_message_send,
     },
     session::Session,
 };
@@ -175,6 +176,9 @@ impl Server {
                                 }
                                 MessageType::ServerShutdown => {
                                     handle_server_shutdown(&message, Arc::clone(&shared_state)).await;
+                                }
+                                MessageType::DirectMessageSend => {
+                                     handle_direct_message_send(&message, tx.clone(), Arc::clone(&shared_state), session_id).await;
                                 }
                                 _ => {}
                             }

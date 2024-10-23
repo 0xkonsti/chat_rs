@@ -100,6 +100,23 @@ impl SharedState {
         }
     }
 
+    pub async fn get_session_by_user(&self, user: &str) -> Option<ArcRwLock<Session>> {
+        if let Some(user) = self.users.get(user) {
+            if let Some(id) = user.session_id() {
+                return self.sessions.get(&id).cloned();
+            }
+        }
+
+        None
+    }
+
+    pub async fn get_user_by_session(&self, id: &Uuid) -> Option<String> {
+        if let Some(session) = self.sessions.get(id) {
+            return session.read().await.user().cloned();
+        }
+        None
+    }
+
     pub async fn update_heartbeat(&self, id: Uuid, heartbeat: Option<chrono::DateTime<chrono::Utc>>) {
         if let Some(session) = self.sessions.get(&id) {
             session.write().await.update_heartbeat(heartbeat);

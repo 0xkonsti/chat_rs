@@ -38,6 +38,21 @@ impl Application {
         (username, password)
     }
 
+    fn get_message_data() -> (String, String) {
+        let mut recipient = String::new();
+        let mut message = String::new();
+
+        print!("Enter recipient: ");
+        std::io::stdout().flush().unwrap();
+        std::io::stdin().read_line(&mut recipient).unwrap();
+
+        print!("Enter message: ");
+        std::io::stdout().flush().unwrap();
+        std::io::stdin().read_line(&mut message).unwrap();
+
+        (recipient, message)
+    }
+
     pub async fn run(&self) -> Result<(), Box<dyn Error>> {
         tracing::debug!("Starting application");
         tracing::debug!("Connecting to server");
@@ -69,7 +84,10 @@ impl Application {
                     let (username, password) = Self::get_user_data();
                     Message::auth(username.trim(), password.trim())
                 }
-                //"msg" => Message::message("user", "Hello, world!"),
+                "msg" => {
+                    let (recipient, message) = Self::get_message_data();
+                    Message::direct_message_send(recipient.trim(), message.trim())
+                }
                 "log" => Message::SERVER_DEBUG_LOG,
                 "dc" => Message::DISCONNECT,
                 "shutdown" => Message::server_shutdown(5),
@@ -158,6 +176,17 @@ impl Application {
                             let data = message.payload().get_data();
                             let timeout = u64::from_be_bytes(data[0].clone().try_into().unwrap());
                             tracing::warn!("Server shutting down in {} seconds", timeout);
+                        }
+                        MessageType::MessageError => {
+                            let data = message.payload().get_data();
+                            let error = std::str::from_utf8(&data[0]).unwrap();
+                            tracing::error!("Could not send message | Error: {}", error);
+                        }
+                        MessageType::DirectMessageReceive => {
+                            let data = message.payload().get_data();
+                            let sender = std::str::from_utf8(&data[0]).unwrap();
+                            let message = std::str::from_utf8(&data[1]).unwrap();
+                            tracing::info!("Message from {}: {}", sender, message);
                         }
                         _ => {}
                     }
