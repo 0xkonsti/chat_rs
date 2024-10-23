@@ -4,7 +4,7 @@ use chat_core::{
     constants::{HOST, PORT},
     protocol::{Message, MessageType},
 };
-use tokio::{io::AsyncWriteExt, net::TcpStream, sync::mpsc};
+use tokio::{net::TcpStream, sync::mpsc};
 
 const TRACING_LEVEL: tracing::Level = tracing::Level::DEBUG;
 
@@ -41,9 +41,29 @@ impl Application {
 
         tracing::debug!("Connected to server {}", stream_addr);
 
-        std::io::stdin().read_line(&mut String::new()).unwrap();
+        loop {
+            let mut input = String::new();
+            std::io::stdin().read_line(&mut input).unwrap();
 
-        tx.send(Message::DISCONNECT).unwrap();
+            let message = match input.trim() {
+                "new" => Message::auth_create("user", "pass"),
+                "auth" => Message::auth("user", "pass"),
+                //"msg" => Message::message("user", "Hello, world!"),
+                "log" => Message::SERVER_DEBUG_LOG,
+                "dc" => Message::DISCONNECT,
+                _ => Message::heartbeat(),
+            };
+
+            let msg_type = message.message_type();
+            tx.send(message).unwrap();
+            if msg_type == MessageType::Disconnect {
+                break;
+            }
+        }
+
+        //std::io::stdin().read_line(&mut String::new()).unwrap();
+        //
+        //tx.send(Message::DISCONNECT).unwrap();
 
         send_h.await?;
         recv_h.await?;

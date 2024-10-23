@@ -3,12 +3,10 @@ use chrono::{DateTime, Utc};
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
-use super::user::User;
-
 #[derive(Debug)]
 pub struct Session {
     id: Uuid,
-    user: Option<User>,
+    user: Option<String>,
     tx: Option<mpsc::UnboundedSender<Message>>,
     last_heartbeat: Option<DateTime<Utc>>,
 
@@ -32,11 +30,11 @@ impl Session {
         self.id
     }
 
-    pub fn user(&self) -> Option<&User> {
+    pub fn user(&self) -> Option<&String> {
         self.user.as_ref()
     }
 
-    pub fn set_user(&mut self, user: User) {
+    pub fn set_user(&mut self, user: String) {
         self.user = Some(user);
     }
 

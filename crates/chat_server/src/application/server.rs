@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use argon2::Config;
 use chat_core::{
     constants::{HOST, PORT},
     protocol::{Message, MessageType},
@@ -15,7 +16,7 @@ use tokio::{
 use uuid::Uuid;
 
 use super::{ArcRwLock, SharedState};
-use crate::application::session::Session;
+use crate::application::{session::Session, user::User};
 
 #[derive(Debug)]
 pub struct Server {}
@@ -70,10 +71,6 @@ impl Server {
             Arc::clone(&shared_state),
             session_id,
         ));
-
-        // tx.send(Message::PING).unwrap();
-        // tx.send(Message::PONG).unwrap();
-        // tx.send(Message::ACK).unwrap();
 
         send_h.await.unwrap();
         recv_h.await.unwrap();
@@ -145,6 +142,64 @@ impl Server {
                                     ),
                                 )
                                 .await;
+                        }
+                        MessageType::Auth => {
+                            if shared_state.read().await.is_authenticated(session_id).await {
+                                tx.send(Message::NACK).unwrap();
+                                continue;
+                            }
+                            let data = message.payload().get_data();
+                            let username = std::str::from_utf8(&data[0]).unwrap();
+
+                            let user = shared_state.read().await.get_user(username).cloned();
+                            if let Some(user) = user {
+                                if user.session_id().is_some() {
+                                    tx.send(Message::auth_fail("User already logged in")).unwrap();
+                                    continue;
+                                }
+                                if argon2::verify_encoded(&user.pw_hash(), &data[1]).unwrap() {
+                                    shared_state
+                                        .write()
+                                        .await
+                                        .authenticate(session_id, user.name().to_string())
+                                        .await;
+                                    tx.send(Message::auth_success()).unwrap();
+                                    continue;
+                                }
+                            }
+                            tx.send(Message::auth_fail("Invalid username or password")).unwrap();
+                        }
+                        MessageType::AuthCreate => {
+                            if shared_state.read().await.is_authenticated(session_id).await {
+                                tx.send(Message::NACK).unwrap();
+                                continue;
+                            }
+                            let data = message.payload().get_data();
+                            let username = std::str::from_utf8(&data[0]).unwrap();
+
+                            if shared_state.read().await.get_user(username).is_none() {
+                                let password = std::str::from_utf8(&data[1]).unwrap();
+                                let config = Config::default();
+                                // TODO: create a random salt for each user
+                                let hash = argon2::hash_encoded(password.as_bytes(), b"randomsalt", &config).unwrap();
+
+                                let username_string = username.to_string();
+                                let user = User::new(username, hash);
+
+                                shared_state.write().await.add_user(username.to_string(), user);
+                                shared_state
+                                    .write()
+                                    .await
+                                    .authenticate(session_id, username_string)
+                                    .await;
+                                tx.send(Message::auth_success()).unwrap();
+                                continue;
+                            }
+
+                            tx.send(Message::auth_fail("User already exists")).unwrap();
+                        }
+                        MessageType::ServerDebugLog => {
+                            tracing::debug!("{:#?}", shared_state.read().await);
                         }
                         _ => {}
                     }

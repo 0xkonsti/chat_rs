@@ -27,11 +27,13 @@ pub enum MessageType {
     Pong = 0x04,
     Disconnect = 0x05,
     Heartbeat = 0x06,
+    ServerDebugLog = 0x07,
 
     // Authentification
-    Register = 0x10,
-    Login = 0x11,
-    Logout = 0x12,
+    Auth = 0x10,
+    AuthCreate = 0x11,
+    AuthSuccess = 0x12,
+    AuthFailure = 0x13,
 }
 
 #[derive(Debug, Clone)]
@@ -75,10 +77,12 @@ impl MessageType {
             0x04 => MessageType::Pong,
             0x05 => MessageType::Disconnect,
             0x06 => MessageType::Heartbeat,
+            0x07 => MessageType::ServerDebugLog,
 
-            0x10 => MessageType::Register,
-            0x11 => MessageType::Login,
-            0x12 => MessageType::Logout,
+            0x10 => MessageType::Auth,
+            0x11 => MessageType::AuthCreate,
+            0x12 => MessageType::AuthSuccess,
+            0x13 => MessageType::AuthFailure,
 
             _ => MessageType::Empty,
         }
@@ -179,6 +183,11 @@ impl Message {
         payload: Payload::EMPTY,
         checksum: 0,
     };
+    pub const SERVER_DEBUG_LOG: Message = Message {
+        header: Header::from_message_type(MessageType::ServerDebugLog),
+        payload: Payload::EMPTY,
+        checksum: 0,
+    };
 
     pub fn heartbeat() -> Self {
         let mut payload = Payload::default();
@@ -187,6 +196,52 @@ impl Message {
 
         Message {
             header: Header::from_message_type(MessageType::Heartbeat),
+            payload,
+            checksum,
+        }
+    }
+
+    pub fn auth(username: &str, password: &str) -> Self {
+        let mut payload = Payload::default();
+        payload.add_field(username.as_bytes().to_vec());
+        payload.add_field(password.as_bytes().to_vec());
+        let checksum = payload.checksum();
+
+        Message {
+            header: Header::from_message_type(MessageType::Auth),
+            payload,
+            checksum,
+        }
+    }
+
+    pub fn auth_create(username: &str, password: &str) -> Self {
+        let mut payload = Payload::default();
+        payload.add_field(username.as_bytes().to_vec());
+        payload.add_field(password.as_bytes().to_vec());
+        let checksum = payload.checksum();
+
+        Message {
+            header: Header::from_message_type(MessageType::AuthCreate),
+            payload,
+            checksum,
+        }
+    }
+
+    pub fn auth_success() -> Self {
+        Message {
+            header: Header::from_message_type(MessageType::AuthSuccess),
+            payload: Payload::EMPTY,
+            checksum: 0,
+        }
+    }
+
+    pub fn auth_fail(error: &str) -> Self {
+        let mut payload = Payload::default();
+        payload.add_field(error.as_bytes().to_vec());
+        let checksum = payload.checksum();
+
+        Message {
+            header: Header::from_message_type(MessageType::AuthFailure),
             payload,
             checksum,
         }

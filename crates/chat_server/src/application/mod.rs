@@ -57,7 +57,7 @@ impl SharedState {
         let session = self.sessions.get(&id).unwrap().read().await;
         let user = session.user();
         if let Some(user) = user {
-            self.users.get_mut(user.name()).unwrap().remove_session_id();
+            self.users.get_mut(user).unwrap().remove_session_id();
         }
         drop(session);
         self.sessions.remove(&id);
@@ -72,7 +72,7 @@ impl SharedState {
             session.write().await.close();
         }
 
-        self.sessions.remove(&id);
+        self.remove_session(id).await;
 
         tracing::debug!("Closed session {}", id);
     }
@@ -80,6 +80,22 @@ impl SharedState {
     pub async fn update_heartbeat(&self, id: Uuid, heartbeat: Option<chrono::DateTime<chrono::Utc>>) {
         if let Some(session) = self.sessions.get(&id) {
             session.write().await.update_heartbeat(heartbeat);
+        }
+    }
+
+    pub async fn is_authenticated(&self, id: Uuid) -> bool {
+        if let Some(session) = self.sessions.get(&id) {
+            return session.read().await.user().is_some();
+        }
+        false
+    }
+
+    pub async fn authenticate(&mut self, id: Uuid, user: String) {
+        if let Some(session) = self.sessions.get(&id) {
+            if let Some(user) = self.users.get_mut(&user) {
+                user.set_session_id(id);
+            }
+            session.write().await.set_user(user);
         }
     }
 }
