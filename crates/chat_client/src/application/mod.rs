@@ -58,11 +58,11 @@ impl Application {
 
         let mut host = HOST.to_string();
 
-        tracing::debug!("Connecting to server at {}:{}", host, PORT);
-
         if let Ok(env_host) = std::env::var("SERVER_HOST") {
-            host = env_host;
+            host = env_host.trim().to_string();
         }
+
+        tracing::debug!("Connecting to server at {}:{}", host, PORT);
 
         let stream = TcpStream::connect((host, PORT)).await?;
         let stream_addr = stream.peer_addr()?;
